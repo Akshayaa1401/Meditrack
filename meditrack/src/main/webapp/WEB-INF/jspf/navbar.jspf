@@ -1,0 +1,149 @@
+<%@ include file="/WEB-INF/jspf/taglibs.jspf" %>
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+        <div class="sidebar-logo-mark">M</div>
+        <div>
+            <div class="sidebar-logo-text">MediTrack</div>
+            <span class="sidebar-logo-sub">Waste Management</span>
+        </div>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-label">Main</div>
+        <ul class="sidebar-nav">
+            <c:choose>
+                <c:when test="${sessionScope.role == 'ADMIN'}">
+                    <li><a href="${pageContext.request.contextPath}/admin/dashboard">
+                        <span class="nav-icon">&#x2302;</span> Dashboard</a></li>
+                    <li><a href="${pageContext.request.contextPath}/admin/hospitals">
+                        <span class="nav-icon">&#x2302;</span> Hospitals</a></li>
+                    <li><a href="${pageContext.request.contextPath}/admin/collectors">
+                        <span class="nav-icon">&#x1F6A8;</span> Collectors</a></li>
+                    <li><a href="${pageContext.request.contextPath}/admin/analytics">
+                        <span class="nav-icon">&#x25B2;</span> Analytics</a></li>
+                </c:when>
+                <c:when test="${sessionScope.role == 'HOSPITAL_STAFF'}">
+                    <li><a href="${pageContext.request.contextPath}/hospital/dashboard">
+                        <span class="nav-icon">&#x2302;</span> Dashboard</a></li>
+                    <li><a href="${pageContext.request.contextPath}/hospital/submitWaste">
+                        <span class="nav-icon">+</span> Report Waste</a></li>
+                    <li><a href="${pageContext.request.contextPath}/hospital/register">
+                        <span class="nav-icon">&#x270E;</span> Hospital Profile</a></li>
+                </c:when>
+                <c:when test="${sessionScope.role == 'COLLECTOR'}">
+                    <li><a href="${pageContext.request.contextPath}/collector/dashboard">
+                        <span class="nav-icon">&#x2302;</span> My Collections</a></li>
+                    <li><a href="${pageContext.request.contextPath}/collector/optimizeRoute">
+                        <span class="nav-icon">&#x2316;</span> Optimize Route</a></li>
+                </c:when>
+            </c:choose>
+        </ul>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-label">Account</div>
+        <ul class="sidebar-nav">
+            <li><a href="${pageContext.request.contextPath}/profile">
+                <span class="nav-icon">&#x1F464;</span> My Profile</a></li>
+            <li>
+                <a href="#" id="notifSidebarBtn">
+                    <span class="nav-icon">&#x1F514;</span> Notifications
+                    <span class="nav-badge" id="sidebarNotifBadge" style="display:none;">0</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-user">
+            <div class="sidebar-avatar">${sessionScope.fullName != null ? sessionScope.fullName.substring(0,1).toUpperCase() : 'U'}</div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name">${sessionScope.fullName}</div>
+                <div class="sidebar-user-role">${sessionScope.role}</div>
+            </div>
+        </div>
+        <a href="${pageContext.request.contextPath}/logout" class="sidebar-logout">
+            <span>&#x2190;</span> Sign out
+        </a>
+    </div>
+</div>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<%-- Notification dropdown (floats over content) --%>
+<div class="notif-dropdown" id="notifDropdown">
+    <div class="notif-panel-header">
+        <h4>Notifications</h4>
+        <button class="notif-mark-read" onclick="markAllRead()">Mark all read</button>
+    </div>
+    <div id="notifList"><div class="notif-empty">Loading...</div></div>
+</div>
+
+<script>
+(function(){
+    var CTX = "${pageContext.request.contextPath}";
+    var ICONS = {
+        EMERGENCY:'&#x1F6A8;', NEW_REQUEST:'&#x1F4CB;', ASSIGNED:'&#x2705;',
+        ACCEPTED:'&#x2705;', EN_ROUTE:'&#x1F69A;', ARRIVED:'&#x1F4CD;',
+        COLLECTED:'&#x1F4E6;', DISPOSED:'&#x2713;', OVERDUE:'&#x1F534;',
+        DISPOSAL_COMPLETE:'&#x2713;', REASSIGNED:'&#x1F504;', DEFAULT:'&#x1F514;'
+    };
+    function esc(s){ if(!s)return''; return s.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+    function loadNotifs(){
+        fetch(CTX+'/api/notifications').then(function(r){return r.json();}).then(function(d){
+            var badge=document.getElementById('sidebarNotifBadge');
+            if(badge){ if(d.count>0){badge.textContent=d.count>9?'9+':d.count;badge.style.display='flex';}else{badge.style.display='none';} }
+            var list=document.getElementById('notifList');
+            if(!list)return;
+            if(!d.notifications||!d.notifications.length){list.innerHTML='<div class="notif-empty">No notifications yet</div>';return;}
+            list.innerHTML=d.notifications.slice(0,12).map(function(n){
+                var icon=ICONS[n.type]||ICONS.DEFAULT;
+                var t=n.createdAt?(n.createdAt.substring(11,16)+' UTC'):'';
+                return '<div class="notif-item'+(n.read?'':' unread')+'">'
+                    +'<div class="notif-item-icon">'+icon+'</div>'
+                    +'<div class="notif-item-body"><div class="notif-item-msg">'+esc(n.message)+'</div>'
+                    +'<div class="notif-item-time">'+t+'</div></div></div>';
+            }).join('');
+        }).catch(function(){});
+    }
+    window.markAllRead=function(){
+        fetch(CTX+'/api/notifications',{method:'POST'}).then(function(){loadNotifs();}).catch(function(){});
+    };
+    var btn=document.getElementById('notifSidebarBtn');
+    var dd=document.getElementById('notifDropdown');
+    if(btn&&dd){
+        btn.addEventListener('click',function(e){
+            e.preventDefault();
+            dd.classList.toggle('open');
+            if(dd.classList.contains('open')){
+                var r=btn.getBoundingClientRect();
+                dd.style.left=(r.left+r.width+8)+'px';
+                dd.style.top=r.top+'px';
+                dd.style.position='fixed';
+            }
+        });
+    }
+    document.addEventListener('click',function(e){
+        if(dd&&btn&&!btn.contains(e.target)&&!dd.contains(e.target))dd.classList.remove('open');
+    });
+    /* Mobile sidebar */
+    var overlay=document.getElementById('sidebarOverlay');
+    if(overlay){
+        overlay.addEventListener('click',function(){
+            document.getElementById('sidebar').classList.remove('open');
+            overlay.classList.remove('visible');
+        });
+    }
+    window.toggleSidebar=function(){
+        var s=document.getElementById('sidebar');
+        s.classList.toggle('open');
+        if(overlay)overlay.classList.toggle('visible');
+    };
+    /* Poll every 30s */
+    loadNotifs();
+    setInterval(function(){
+        loadNotifs();
+        fetch(CTX+'/api/overdueCheck').catch(function(){});
+    },30000);
+})();
+</script>
